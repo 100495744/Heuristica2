@@ -134,6 +134,10 @@ vector<Node> expand_node(const Node& current, const Map& map, const pair<int, in
 // Implementación del algoritmo A*
 vector<Node> astar(const Map& map, int num_h) {
     vector<Node> solutions;
+    unordered_map<string, double> best_cost; // Mejor coste por nodo
+    int nodes_generated = 0;
+    int nodes_expanded = 0;
+
     for (size_t i = 0; i < map.init_positions.size(); i++) {
         auto compare = [](const Node& a, const Node& b) {
             return (a.g + a.h) > (b.g + b.h);
@@ -156,18 +160,22 @@ vector<Node> astar(const Map& map, int num_h) {
                 break;
             }
 
-            string current_state = to_string(current.x) + "," + to_string(current.y) + "," + to_string(current.t);
-            if (closed_set.count(current_state)) continue;
-            closed_set.insert(current_state);
+            string current_state = to_string(current.x) + "," + to_string(current.y);
+            if (best_cost.find(current_state) != best_cost.end() && best_cost[current_state] <= current.g) {
+                continue; // Nodo ya procesado con un mejor coste
+            }
+            best_cost[current_state] = current.g;
 
             for (const Node& successor : expand_node(current, map, {goal_x, goal_y})) {
-                string successor_state = to_string(successor.x) + "," + to_string(successor.y) + "," + to_string(successor.t);
-                if (!closed_set.count(successor_state)) {
-                    open_set.push(successor);
-                }
+                nodes_generated++;
+                open_set.push(successor);
             }
         }
     }
+
+    cout << "Nodos generados: " << nodes_generated << endl;
+    cout << "Nodos expandidos: " << nodes_expanded << endl;
+
     return solutions;
 }
 
