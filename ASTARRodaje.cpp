@@ -70,10 +70,9 @@ Map read_map(const string& path) {
     // Leer el mapa
     getline(file, line); // Limpiar cualquier salto de línea restante
     while (getline(file, line)) {
-        cout << "Línea leída: " << line << endl; // Depuración
         vector<char> row;
         for (char c : line) {
-            if (c != ';' && c != '\n' && c != '\r') { // Manejo de separadores y saltos de línea
+            if (c != ';' && c != '\n' && c != '\r') {
                 row.push_back(c);
             }
         }
@@ -90,16 +89,6 @@ Map read_map(const string& path) {
     map.rows = map.grid.size();
     map.cols = map.grid[0].size();
 
-    // Depuración: Imprimir el contenido del mapa
-    cout << "Mapa procesado (grid):" << endl;
-    for (size_t i = 0; i < map.grid.size(); i++) {
-        for (size_t j = 0; j < map.grid[i].size(); j++) {
-            cout << map.grid[i][j] << " ";
-        }
-        cout << endl;
-    }
-    cout << "Dimensiones calculadas - Filas: " << map.rows << ", Columnas: " << map.cols << endl;
-
     return map;
 }
 
@@ -109,7 +98,7 @@ double manhattan_heuristic(int x1, int y1, int x2, int y2) {
 }
 
 // Expande los nodos para el A*
-vector<Node> expand_node(const Node& current, const Map& map, const pair<int, int>& goal) {
+vector<Node> expand_node(const Node& current, const Map& map, const pair<int, int>& goal, int& nodes_generated) {
     vector<Node> successors;
     vector<pair<int, int>> directions = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}};
     vector<string> dir_symbols = {"→", "↓", "←", "↑"};
@@ -121,22 +110,22 @@ vector<Node> expand_node(const Node& current, const Map& map, const pair<int, in
         if (nx >= 0 && ny >= 0 && nx < map.rows && ny < map.cols && map.grid[nx][ny] != 'G') {
             Node successor(nx, ny, current.t + 1, current.g + 1, manhattan_heuristic(nx, ny, goal.first, goal.second), current.moves + "(" + to_string(nx) + "," + to_string(ny) + ")" + dir_symbols[i] + " ");
             successors.push_back(successor);
+            nodes_generated++;
         }
     }
 
     // Agregar opción de espera
     Node wait_node(current.x, current.y, current.t + 1, current.g, current.h, current.moves + "w ");
     successors.push_back(wait_node);
+    nodes_generated++;
 
     return successors;
 }
 
 // Implementación del algoritmo A*
-vector<Node> astar(const Map& map, int num_h) {
+vector<Node> astar(const Map& map, int num_h, double& initial_heuristic, int& nodes_generated, int& nodes_expanded) {
     vector<Node> solutions;
     unordered_map<string, double> best_cost; // Mejor coste por nodo
-    int nodes_generated = 0;
-    int nodes_expanded = 0;
 
     for (size_t i = 0; i < map.init_positions.size(); i++) {
         auto compare = [](const Node& a, const Node& b) {
@@ -148,12 +137,15 @@ vector<Node> astar(const Map& map, int num_h) {
         auto [init_x, init_y] = map.init_positions[i];
         auto [goal_x, goal_y] = map.goal_positions[i];
 
-        Node start(init_x, init_y, 0, 0, manhattan_heuristic(init_x, init_y, goal_x, goal_y), "(" + to_string(init_x) + "," + to_string(init_y) + ") ");
+        initial_heuristic = manhattan_heuristic(init_x, init_y, goal_x, goal_y);
+        Node start(init_x, init_y, 0, 0, initial_heuristic, "(" + to_string(init_x) + "," + to_string(init_y) + ") ");
         open_set.push(start);
+        nodes_generated++;
 
         while (!open_set.empty()) {
             Node current = open_set.top();
             open_set.pop();
+            nodes_expanded++;
 
             if (current.x == goal_x && current.y == goal_y) {
                 solutions.push_back(current);
@@ -166,15 +158,11 @@ vector<Node> astar(const Map& map, int num_h) {
             }
             best_cost[current_state] = current.g;
 
-            for (const Node& successor : expand_node(current, map, {goal_x, goal_y})) {
-                nodes_generated++;
+            for (const Node& successor : expand_node(current, map, {goal_x, goal_y}, nodes_generated)) {
                 open_set.push(successor);
             }
         }
     }
-
-    cout << "Nodos generados: " << nodes_generated << endl;
-    cout << "Nodos expandidos: " << nodes_expanded << endl;
 
     return solutions;
 }
@@ -183,17 +171,24 @@ vector<Node> astar(const Map& map, int num_h) {
 void write_solution(const vector<Node>& solutions, const string& output_path) {
     ofstream file(output_path);
     for (const Node& sol : solutions) {
-        file << sol.moves << endl;
+        string formatted_moves = sol.moves;
+        if (formatted_moves.find(" ") == 0) {
+            formatted_moves.erase(0, 1); // Elimina espacio inicial si existe
+        }
+        while (formatted_moves.find(") ") != string::npos) {
+            formatted_moves.replace(formatted_moves.find(") "), 2, ")");
+        }
+        file << formatted_moves << endl;
     }
 }
 
 // Escritura de estadísticas
-void write_stats(const vector<Node>& solutions, const string& stats_path, chrono::duration<double> elapsed) {
+void write_stats(const vector<Node>& solutions, const string& stats_path, chrono::duration<double> elapsed, double initial_heuristic, int nodes_generated, int nodes_expanded) {
     ofstream file(stats_path);
     file << "Tiempo total: " << elapsed.count() << "s\n";
     file << "Makespan: " << solutions.back().t << "\n";
-    file << "h inicial: " << solutions.front().h << "\n";
-    file << "Nodos expandidos: " << solutions.size() << "\n";
+    file << "h inicial: " << initial_heuristic << "\n";
+    file << "Nodos expandidos: " << nodes_expanded << "\n";
 }
 
 int main(int argc, char** argv) {
@@ -207,17 +202,28 @@ int main(int argc, char** argv) {
 
     Map map = read_map(map_path);
 
+    double initial_heuristic = 0.0;
+    int nodes_generated = 0;
+    int nodes_expanded = 0;
+
     auto start_time = chrono::high_resolution_clock::now();
-    vector<Node> solutions = astar(map, num_h);
+    vector<Node> solutions = astar(map, num_h, initial_heuristic, nodes_generated, nodes_expanded);
     auto end_time = chrono::high_resolution_clock::now();
 
     chrono::duration<double> elapsed = end_time - start_time;
 
+    // Remover extensión .csv del nombre del archivo
+    size_t dot_pos = map_path.find_last_of('.');
+    if (dot_pos != string::npos) {
+        map_path = map_path.substr(0, dot_pos);
+    }
+
+    // Generar archivos .output y .stat
     string output_path = map_path + "-" + to_string(num_h) + ".output";
     string stats_path = map_path + "-" + to_string(num_h) + ".stat";
 
     write_solution(solutions, output_path);
-    write_stats(solutions, stats_path, elapsed);
+    write_stats(solutions, stats_path, elapsed, initial_heuristic, nodes_generated, nodes_expanded);
 
     return 0;
 }
