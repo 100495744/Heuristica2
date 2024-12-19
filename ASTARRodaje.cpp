@@ -36,28 +36,70 @@ Map read_map(const string& path) {
     Map map;
     string line;
 
+    if (!file.is_open()) {
+        cerr << "Error: No se pudo abrir el archivo " << path << endl;
+        exit(EXIT_FAILURE);
+    }
+
+    if (file.peek() == EOF) {
+        cerr << "Error: El archivo " << path << " está vacío." << endl;
+        exit(EXIT_FAILURE);
+    }
+
     int n;
     file >> n;
     map.init_positions.resize(n);
     map.goal_positions.resize(n);
 
+    // Leer posiciones iniciales y metas
     for (int i = 0; i < n; i++) {
-        file >> map.init_positions[i].first >> map.init_positions[i].second;
-        file >> map.goal_positions[i].first >> map.goal_positions[i].second;
+        string init_pos, goal_pos;
+        file >> init_pos >> goal_pos;
+
+        // Extraer coordenadas de las posiciones iniciales
+        int init_x = stoi(init_pos.substr(1, init_pos.find(',') - 1));
+        int init_y = stoi(init_pos.substr(init_pos.find(',') + 1, init_pos.find(')') - init_pos.find(',') - 1));
+        map.init_positions[i] = {init_x, init_y};
+
+        // Extraer coordenadas de las posiciones finales
+        int goal_x = stoi(goal_pos.substr(1, goal_pos.find(',') - 1));
+        int goal_y = stoi(goal_pos.substr(goal_pos.find(',') + 1, goal_pos.find(')') - goal_pos.find(',') - 1));
+        map.goal_positions[i] = {goal_x, goal_y};
     }
 
-    while (file >> line) {
+    // Leer el mapa
+    getline(file, line); // Limpiar cualquier salto de línea restante
+    while (getline(file, line)) {
+        cout << "Línea leída: " << line << endl; // Depuración
         vector<char> row;
         for (char c : line) {
-            if (c != ';') {
+            if (c != ';' && c != '\n' && c != '\r') { // Manejo de separadores y saltos de línea
                 row.push_back(c);
             }
         }
-        map.grid.push_back(row);
+        if (!row.empty()) {
+            map.grid.push_back(row);
+        }
+    }
+
+    if (map.grid.empty() || map.grid[0].empty()) {
+        cerr << "Error: El mapa no tiene dimensiones válidas." << endl;
+        exit(EXIT_FAILURE);
     }
 
     map.rows = map.grid.size();
     map.cols = map.grid[0].size();
+
+    // Depuración: Imprimir el contenido del mapa
+    cout << "Mapa procesado (grid):" << endl;
+    for (size_t i = 0; i < map.grid.size(); i++) {
+        for (size_t j = 0; j < map.grid[i].size(); j++) {
+            cout << map.grid[i][j] << " ";
+        }
+        cout << endl;
+    }
+    cout << "Dimensiones calculadas - Filas: " << map.rows << ", Columnas: " << map.cols << endl;
+
     return map;
 }
 
@@ -171,3 +213,5 @@ int main(int argc, char** argv) {
 
     return 0;
 }
+
+
