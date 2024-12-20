@@ -53,7 +53,7 @@ vector<pair<int, int>> directions = {
     {1, 0},  // Down
     {-1, 0}, // Up
 };
-vector<string> actions = {"→", "←", "↓", "↑", "w"}; // Added wait action
+vector<string> actions = {"→", "←", "↓", "↑", "w"};
 
 unordered_map<int, unordered_map<Position, int>> occupied_positions; // time -> position -> plane index
 
@@ -63,31 +63,25 @@ bool is_valid(Position pos, int t, int plane_idx, Position current_pos, bool is_
         return false;
     }
 
-    // Check if the move would cause a crossing with another plane (interchange positions)
-    if (!is_waiting) {
-        for (const auto& [time, positions] : occupied_positions) {
-            if (time == t) {
-                for (const auto& [other_pos, other_idx] : positions) {
-                    if (other_idx != plane_idx && other_pos == current_pos && positions.count(pos) && positions.at(pos) == other_idx) {
-                        return false; // Prevent crossing or position interchange
-                    }
-                }
-            }
-        }
-    }
-
-    // Predict future occupation: Check if the position will be free at t+1
-    if (predicted_positions.size() > plane_idx) {
-        for (const auto& [other_plane_time, other_plane_pos] : predicted_positions[plane_idx]) {
-            if (other_plane_time == t + 1 && other_plane_pos == pos) {
-                return false; // Another plane is expected to occupy this position
-            }
-        }
-    }
-
     // Check if the node has already been expanded
     if (closed_list.count(pos)) {
         return false;
+    }
+
+    // Restriction 1: Avoid swapping positions
+    if (occupied_positions.count(t)) {
+        const auto& current_occupied = occupied_positions[t];
+        if (current_occupied.count(pos) && current_occupied.at(pos) != plane_idx) {
+            const int other_plane_idx = current_occupied.at(pos);
+            if (predicted_positions[other_plane_idx].count(t + 1) && predicted_positions[other_plane_idx].at(t + 1) == current_pos) {
+                return false; // Prevent position swap
+            }
+        }
+    }
+
+    // Restriction 2: Avoid collision at the same position
+    if (occupied_positions.count(t) && occupied_positions[t].count(pos) && occupied_positions[t][pos] != plane_idx) {
+        return false; // Another plane is occupying this position
     }
 
     return true;
@@ -249,5 +243,12 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
+
+
+
+
+
+
+
 
 
